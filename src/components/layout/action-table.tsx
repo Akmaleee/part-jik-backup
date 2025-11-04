@@ -1,0 +1,125 @@
+"use client";
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { MoreHorizontal } from "lucide-react";
+
+interface ActionTableProps {
+  row: any;
+  type: string;
+  onView?: (row: any) => void;
+  onEdit?: (row: any) => void;
+  onDelete?: (row: any) => void;
+  onPrint?: (row: any) => void; // 🆕 handler print
+  onCustomAction?: (action: string, row: any) => void;
+}
+
+const STATUS_FLOW: Record<string, string[]> = {
+  MOM: ["Review Mitra", "Signing Mitra", "Finish"],
+  JIK: ["Sirkulir TSAT", "Finish"],
+  NDA: [
+    "Review Mitra",
+    "Review Legal TSAT",
+    "Sirkulir TSAT",
+    "Signing Mitra",
+    "Finish",
+  ],
+  MOU: [
+    "Review Mitra",
+    "Review Legal TSAT",
+    "Sirkulir TSAT",
+    "Signing Mitra",
+    "Finish",
+  ],
+  MSA: [
+    "Review Mitra",
+    "Review Legal TSAT",
+    "Sirkulir TSAT",
+    "Signing Mitra",
+    "Finish",
+  ],
+};
+
+// 🔧 Helper untuk aksi dinamis (case-insensitive)
+function getDynamicActions(type: string, status: string): string[] {
+  const upperType = type?.toUpperCase();
+  const flow = STATUS_FLOW[upperType];
+  if (!flow) return [];
+
+  const normalizedStatus = status?.trim().toUpperCase();
+
+  switch (normalizedStatus) {
+    case "REVIEW MITRA":
+    case "REVIEW LEGAL TSAT":
+      return ["Approve"];
+    case "SIRKULIR TSAT":
+      return ["Upload"];
+    case "SIGNING MITRA":
+      return ["Sign"];
+    case "DRAFT":
+      return ["Send"];
+    default:
+      return [];
+  }
+}
+
+export function ActionTable({
+  row,
+  type,
+  onView,
+  onEdit,
+  onDelete,
+  onPrint,
+  onCustomAction,
+}: ActionTableProps) {
+  const currentStatus = row?.progress?.status?.name || "Draft";
+  const dynamicActions = getDynamicActions(type, currentStatus);
+  const isDraft = currentStatus?.trim().toLowerCase() === "draft";
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="h-8 w-8 p-0">
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => onView?.(row)}>View</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onEdit?.(row)}>Edit</DropdownMenuItem>
+
+        {/* 🖨️ Tombol Print — hanya muncul jika status ≠ Draft */}
+        {!isDraft && (
+          <DropdownMenuItem onClick={() => onPrint?.(row)}>
+            Print
+          </DropdownMenuItem>
+        )}
+
+        {/* 🔄 Aksi tambahan berdasarkan status dokumen */}
+        {dynamicActions.length > 0 && <DropdownMenuSeparator />}
+        {dynamicActions.map((action) => (
+          <DropdownMenuItem
+            key={action}
+            onClick={() => onCustomAction?.(action, row)}
+          >
+            {action}
+          </DropdownMenuItem>
+        ))}
+
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="text-red-600 focus:text-red-600"
+          onClick={() => onDelete?.(row)}
+        >
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
