@@ -86,7 +86,8 @@ export function ActionTable({
 
   // --- 3. TAMBAHKAN LOGIKA INI ---
   const isGenerating = generatingId === row.id;
-  const showDocxButton = (type.toLowerCase() === 'jik' || type.toLowerCase() === 'mom') && !isDraft;
+  const showDocxButton = (type.toLowerCase() === 'jik' || type.toLowerCase() === 'mom') ;
+  // && !isDraft
   // --- AKHIR TAMBAHAN ---
 
   return (
