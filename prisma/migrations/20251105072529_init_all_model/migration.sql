@@ -34,6 +34,8 @@ CREATE TABLE "public"."Mom" (
     "content" JSONB,
     "progress_id" INTEGER,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+    "deleted_at" TIMESTAMP(3),
 
     CONSTRAINT "Mom_pkey" PRIMARY KEY ("id")
 );
@@ -43,8 +45,8 @@ CREATE TABLE "public"."Approver" (
     "id" SERIAL NOT NULL,
     "mom_id" INTEGER NOT NULL,
     "name" TEXT NOT NULL,
-    "type" TEXT NOT NULL,
-    "email" TEXT NOT NULL,
+    "type" TEXT,
+    "email" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -85,6 +87,20 @@ CREATE TABLE "public"."NextAction" (
 );
 
 -- CreateTable
+CREATE TABLE "public"."JikApprover" (
+    "id" SERIAL NOT NULL,
+    "jik_id" INTEGER NOT NULL,
+    "name" TEXT NOT NULL,
+    "type" TEXT NOT NULL,
+    "jabatan" TEXT,
+    "nik" TEXT,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "JikApprover_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "public"."Jik" (
     "id" SERIAL NOT NULL,
     "company_id" INTEGER NOT NULL,
@@ -98,6 +114,8 @@ CREATE TABLE "public"."Jik" (
     "document_initiative" JSONB,
     "progress_id" INTEGER,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+    "deleted_at" TIMESTAMP(3),
 
     CONSTRAINT "Jik_pkey" PRIMARY KEY ("id")
 );
@@ -133,6 +151,9 @@ CREATE TABLE "public"."Document" (
     "id" SERIAL NOT NULL,
     "progress_id" INTEGER NOT NULL,
     "document_url" TEXT,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+    "deleted_at" TIMESTAMP(3),
 
     CONSTRAINT "Document_pkey" PRIMARY KEY ("id")
 );
@@ -157,6 +178,9 @@ ALTER TABLE "public"."MomAttachmentFile" ADD CONSTRAINT "MomAttachmentFile_secti
 
 -- AddForeignKey
 ALTER TABLE "public"."NextAction" ADD CONSTRAINT "NextAction_mom_id_fkey" FOREIGN KEY ("mom_id") REFERENCES "public"."Mom"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."JikApprover" ADD CONSTRAINT "JikApprover_jik_id_fkey" FOREIGN KEY ("jik_id") REFERENCES "public"."Jik"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."Jik" ADD CONSTRAINT "Jik_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."Company"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
