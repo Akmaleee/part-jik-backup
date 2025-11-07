@@ -7,8 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Loader2, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-export default function NdaPage() {
-  const [ndas, setNdas] = useState<any[]>([]);
+export default function MouPage() {
+  const [mous, setMous] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -17,10 +17,10 @@ export default function NdaPage() {
   useEffect(() => {
     setLoading(true);
 
-    fetch("/api/nda")
+    fetch("/api/mou")
       .then((res) => res.json())
       .then((data) => {
-        setNdas(data);
+        setMous(data);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -33,10 +33,10 @@ export default function NdaPage() {
 
   // 🔍 Filter data secara real-time
   const filteredNdas = useMemo(() => {
-    return ndas.filter((c) =>
+    return mous.filter((c) =>
       c.company?.name.toLowerCase().includes(filter.toLowerCase())
     );
-  }, [ndas, filter]);
+  }, [mous, filter]);
 
   // 📤 Upload file ke server eksternal + simpan ke /api/document
   const handleUpload = async (file: File, companyId?: string) => {
@@ -67,7 +67,7 @@ export default function NdaPage() {
         companyId,
         fileUrl,
         fileName: result?.data?.file,
-        step_name: "NDA",
+        step_name: "MOU",
         status: result?.data?.status ?? "processing",
       };
 
@@ -84,7 +84,7 @@ export default function NdaPage() {
       const newDoc = await documentRes.json();
 
       // 3️⃣ Tambahkan hasil ke state
-      setNdas((prev) => [...prev, newDoc]);
+      setMous((prev) => [...prev, newDoc]);
       console.log("📄 Dokumen berhasil disimpan:", newDoc);
     } catch (err) {
       console.error("❌ Proses upload gagal:", err);
@@ -96,7 +96,7 @@ export default function NdaPage() {
     <div className="p-6">
       <Card className="shadow-md bg-white rounded-2xl">
         <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle className="text-2xl font-bold">NDA Tracker</CardTitle>
+          <CardTitle className="text-2xl font-bold">MOU Tracker</CardTitle>
 
           <div className="flex items-center gap-3 w-full sm:w-auto">
             <div className="relative w-full sm:w-64">
@@ -114,7 +114,7 @@ export default function NdaPage() {
               type="button"
               className="bg-blue-600 hover:bg-blue-700 text-white font-medium w-8 h-8 rounded-sm shadow transition duration-200 flex items-center justify-center"
               onClick={() => setIsOpen(true)}
-              title="Upload NDA Baru"
+              title="Upload MOU Baru"
             >
               +
             </button>
@@ -138,7 +138,7 @@ export default function NdaPage() {
         open={isOpen}
         onClose={() => setIsOpen(false)}
         onSubmit={handleUpload}
-        title="Upload NDA Baru"
+        title="Upload MOU Baru"
         isSelectCompany={1} // tampilkan dropdown company
       />
     </div>
