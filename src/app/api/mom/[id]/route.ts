@@ -1,176 +1,374 @@
-import { NextResponse, NextRequest } from "next/server"; // Import NextRequest
-import { prisma } from "@/lib/prisma/postgres";
-import { z } from "zod";
-import { Prisma } from "@prisma/client";
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma/postgres';
+import { Prisma } from '@prisma/client';
 
-// --- 1. UBAH NAMA SKEMA ASLI ---
-// Ini adalah skema dasar, bagus untuk 'create'
-const baseFormSchema = z.object({
-  title: z.string().min(1, "Title is required"),
-  company_id: z.number().min(1, "Company is required"),
-  date: z.string().min(1, "Date is required"),
-  time: z.string().optional(),
-  venue: z.string().optional(),
-  count_attendees: z.string().optional(),
-  content: z.any().optional(), // Tipe JSON
-  approvers: z
-    .array(
-      z.object({
-        name: z.string().min(1, "Approver name is required"),
-        type: z.string().optional(),
-        email: z.string().optional(),
-      })
-    )
-    .optional(),
-  next_actions: z
-    .array(
-      z.object({
-        action: z.string().min(1, "Action is required"),
-        target: z.string().min(1, "Target is required"),
-        pic: z.string().min(1, "PIC is required"),
-      })
-    )
-    .optional(),
-});
-
-// --- 2. BUAT SKEMA BARU UNTUK UPDATE ---
-// Gunakan .partial() untuk membuat semua field opsional
-const updateFormSchema = baseFormSchema.partial();
-
-// GET (Mengambil 1 MOM)
+// [GET] Handler - Mengambil data MoM untuk halaman edit
 export async function GET(
-  request: NextRequest, // --- 3. UBAH SIGNATUR FUNGSI ---
-  { params }: { params: { id: string } } // params sekarang aman diakses
+  req: Request,
+  { params }: { params: { id: string } }
 ) {
   try {
-    const id = parseInt(params.id); // Ini sekarang aman
+    const id = parseInt(params.id); 
 
     const mom = await prisma.mom.findUnique({
-      where: { id: id, deleted_at: null }, // Tambahkan filter soft delete
+      where: { id: id, deleted_at: null }, 
       include: {
         company: true,
-        approvers: true,
         next_actions: true,
         attachments: {
           include: {
             files: true,
           },
         },
+        // Ambil relasi approver melalui tabel join
+        mom_approvers: {
+          include: {
+            approver: true, 
+          },
+        },
       },
     });
 
     if (!mom) {
-      return NextResponse.json({ error: "MOM not found" }, { status: 404 });
+      return NextResponse.json({ error: 'MOM not found' }, { status: 404 });
     }
-    return NextResponse.json(mom);
-  } catch (error) {
-    console.error("[MOM_GET_ID] Error:", error);
+
+    // Transformasi data agar frontend tetap bisa menerima format `approvers`
+    const { mom_approvers, ...restOfMom } = mom;
+    const responseData = {
+      ...restOfMom,
+      // Ubah mom_approvers: [{ approver: {...} }] -> approvers: [...]
+      approvers: mom_approvers.map(ma => ma.approver),
+      // Kirim juga ID approver mentah, mungkin berguna untuk form
+      approverIds: mom_approvers.map(ma => ma.approver_id),
+    };
+
+    return NextResponse.json(responseData, { status: 200 });
+
+  } catch (error: any) {
+    console.error('[MOM_GET_ID] Error:', error);
     return NextResponse.json(
-      { error: "Internal Server Error" },
+      { error: 'Failed to fetch MOM', details: error.message },
       { status: 500 }
     );
   }
 }
 
-// PUT (Update 1 MOM)
+// [PUT] Handler - Menyimpan perubahan dari halaman edit
 export async function PUT(
-  request: NextRequest, // --- 3. UBAH SIGNATUR FUNGSI ---
-  { params }: { params: { id: string } } // params sekarang aman diakses
+  req: Request,
+  { params }: { params: { id: string } }
 ) {
   try {
-    const id = parseInt(params.id); // Ini sekarang aman
-    const body = await request.json();
+    const id = parseInt(params.id);
+    const body = await req.json();
+    
+    const { 
+      company_id, 
+      title, 
+      date, 
+      time, 
+      venue, 
+      count_attendees, 
+      content, 
+      next_actions, 
+      approverIds, // Diubah dari 'approvers'
+      attachments 
+    } = body;
 
-    // --- 4. GUNAKAN SKEMA UPDATE (PARTIAL) ---
-    const validatedData = updateFormSchema.parse(body);
+    // Validasi (Sederhana)
+    if (!title || !company_id) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
 
-    const { approvers, next_actions, ...momData } = validatedData;
-
-    const updatedMom = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // 1. Update data MOM utama
+    const updatedMom = await prisma.$transaction(async (tx) => {
+      // 1. Update detail dasar Mom
       const mom = await tx.mom.update({
         where: { id: id },
         data: {
-          ...momData,
-          // --- 5. TANGANI 'date' YANG MUNGKIN UNDEFINED ---
-          date: momData.date ? new Date(momData.date) : undefined,
+          company_id: parseInt(company_id),
+          title,
+          date: new Date(date),
+          time,
+          venue,
+          count_attendees,
+          // --- PERBAIKAN: Hapus 'as Prisma.JsonValue' ---
+          content: content, 
+          // --- AKHIR PERBAIKAN ---
+          updated_at: new Date(),
         },
       });
 
-      // 2. Hapus/Buat approvers baru (HANYA JIKA ADA DI BODY)
-      if (approvers) {
-        await tx.approver.deleteMany({
-          where: { mom_id: id },
-        });
-        await tx.approver.createMany({
-          data: approvers.map((approver) => ({
-            ...approver,
+      // 2. Handle Next Actions (Hapus yang lama, buat yang baru)
+      await tx.nextAction.deleteMany({
+        where: { mom_id: id },
+      });
+      if (next_actions && Array.isArray(next_actions) && next_actions.length > 0) {
+        await tx.nextAction.createMany({
+          data: next_actions.map((action: any) => ({
+            action: action.action,
+            target: action.target,
+            pic: action.pic,
             mom_id: id,
           })),
         });
       }
 
-      // 4. Hapus/Buat next_actions baru (HANYA JIKA ADA DI BODY)
-      if (next_actions) {
-        await tx.nextAction.deleteMany({
-          where: { mom_id: id },
-        });
-        await tx.nextAction.createMany({
-          data: next_actions.map((action) => ({
-            ...action,
+      // 3. Handle Approvers (Hapus relasi lama, buat relasi baru)
+      await tx.momApprover.deleteMany({
+        where: { mom_id: id }
+      });
+
+      if (approverIds && Array.isArray(approverIds) && approverIds.length > 0) {
+        await tx.momApprover.createMany({
+          data: approverIds.map((approverId: number) => ({
             mom_id: id,
-          })),
+            approver_id: approverId
+          }))
         });
+      }
+
+      // 4. Handle Attachments (Logika kompleks, hapus dan buat ulang)
+      // Hapus file lama dan section lama
+      await tx.momAttachmentFile.deleteMany({
+        where: { section: { mom_id: id } },
+      });
+      await tx.momAttachmentSection.deleteMany({
+        where: { mom_id: id },
+      });
+
+      // Buat section baru dan file baru
+      if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+        for (const section of attachments) {
+          const createdSection = await tx.momAttachmentSection.create({
+            data: {
+              mom_id: id,
+              section_name: section.section_name,
+            },
+          });
+
+          if (section.files && Array.isArray(section.files) && section.files.length > 0) {
+            await tx.momAttachmentFile.createMany({
+              data: section.files.map((file: any) => ({
+                section_id: createdSection.id,
+                file_name: file.file_name,
+                url: file.url,
+              })),
+            });
+          }
+        }
       }
 
       return mom;
     });
 
     return NextResponse.json(updatedMom, { status: 200 });
-  } catch (error) {
-    console.error("[MOM_PUT_ID] Error:", error);
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.issues }, { status: 400 });
-    }
+  } catch (error: any) {
+    console.error('[MOM_PUT_ID] Error:', error);
     return NextResponse.json(
-      { error: "Internal Server Error" },
+      { error: 'Failed to update MOM', details: error.message },
       { status: 500 }
     );
   }
 }
 
-// DELETE (Soft Delete 1 MOM)
+// [DELETE] Handler - Soft delete
 export async function DELETE(
-  request: NextRequest, // --- 3. UBAH SIGNATUR FUNGSI ---
-  { params }: { params: { id: string } } // params sekarang aman diakses
+  req: Request,
+  { params }: { params: { id: string } }
 ) {
   try {
-    const id = parseInt(params.id); // Ini sekarang aman
+    const id = parseInt(params.id);
 
-    const momExists = await prisma.mom.findUnique({
+    // Soft delete MoM
+    await prisma.mom.update({
       where: { id: id },
+      data: { deleted_at: new Date() },
     });
 
-    if (!momExists) {
-      return NextResponse.json({ error: "MOM not found" }, { status: 404 });
-    }
-
-    const softDeletedMom = await prisma.mom.update({
-      where: { id: id },
-      data: {
-        deleted_at: new Date(),
-      },
-    });
-
-    return NextResponse.json(softDeletedMom, { status: 200 });
-  } catch (error) {
-    console.error("[MOM_DELETE_ID] Error:", error);
+    return NextResponse.json({ message: 'MOM soft deleted' }, { status: 200 });
+  } catch (error: any) {
+    console.error('[MOM_DELETE_ID] Error:', error);
     return NextResponse.json(
-      { error: "Internal Server Error" },
+      { error: 'Failed to delete MOM', details: error.message },
       { status: 500 }
     );
   }
 }
+
+// import { NextResponse, NextRequest } from "next/server"; // Import NextRequest
+// import { prisma } from "@/lib/prisma/postgres";
+// import { z } from "zod";
+// import { Prisma } from "@prisma/client";
+
+// // --- 1. UBAH NAMA SKEMA ASLI ---
+// // Ini adalah skema dasar, bagus untuk 'create'
+// const baseFormSchema = z.object({
+//   title: z.string().min(1, "Title is required"),
+//   company_id: z.number().min(1, "Company is required"),
+//   date: z.string().min(1, "Date is required"),
+//   time: z.string().optional(),
+//   venue: z.string().optional(),
+//   count_attendees: z.string().optional(),
+//   content: z.any().optional(), // Tipe JSON
+//   approvers: z
+//     .array(
+//       z.object({
+//         name: z.string().min(1, "Approver name is required"),
+//         type: z.string().optional(),
+//         email: z.string().optional(),
+//       })
+//     )
+//     .optional(),
+//   next_actions: z
+//     .array(
+//       z.object({
+//         action: z.string().min(1, "Action is required"),
+//         target: z.string().min(1, "Target is required"),
+//         pic: z.string().min(1, "PIC is required"),
+//       })
+//     )
+//     .optional(),
+// });
+
+// // --- 2. BUAT SKEMA BARU UNTUK UPDATE ---
+// // Gunakan .partial() untuk membuat semua field opsional
+// const updateFormSchema = baseFormSchema.partial();
+
+// // GET (Mengambil 1 MOM)
+// export async function GET(
+//   request: NextRequest, // --- 3. UBAH SIGNATUR FUNGSI ---
+//   { params }: { params: { id: string } } // params sekarang aman diakses
+// ) {
+//   try {
+//     const id = parseInt(params.id); // Ini sekarang aman
+
+//     const mom = await prisma.mom.findUnique({
+//       where: { id: id, deleted_at: null }, // Tambahkan filter soft delete
+//       include: {
+//         company: true,
+//         approvers: true,
+//         next_actions: true,
+//         attachments: {
+//           include: {
+//             files: true,
+//           },
+//         },
+//       },
+//     });
+
+//     if (!mom) {
+//       return NextResponse.json({ error: "MOM not found" }, { status: 404 });
+//     }
+//     return NextResponse.json(mom);
+//   } catch (error) {
+//     console.error("[MOM_GET_ID] Error:", error);
+//     return NextResponse.json(
+//       { error: "Internal Server Error" },
+//       { status: 500 }
+//     );
+//   }
+// }
+
+// // PUT (Update 1 MOM)
+// export async function PUT(
+//   request: NextRequest, // --- 3. UBAH SIGNATUR FUNGSI ---
+//   { params }: { params: { id: string } } // params sekarang aman diakses
+// ) {
+//   try {
+//     const id = parseInt(params.id); // Ini sekarang aman
+//     const body = await request.json();
+
+//     // --- 4. GUNAKAN SKEMA UPDATE (PARTIAL) ---
+//     const validatedData = updateFormSchema.parse(body);
+
+//     const { approvers, next_actions, ...momData } = validatedData;
+
+//     const updatedMom = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+//       // 1. Update data MOM utama
+//       const mom = await tx.mom.update({
+//         where: { id: id },
+//         data: {
+//           ...momData,
+//           // --- 5. TANGANI 'date' YANG MUNGKIN UNDEFINED ---
+//           date: momData.date ? new Date(momData.date) : undefined,
+//         },
+//       });
+
+//       // 2. Hapus/Buat approvers baru (HANYA JIKA ADA DI BODY)
+//       if (approvers) {
+//         await tx.approver.deleteMany({
+//           where: { mom_id: id },
+//         });
+//         await tx.approver.createMany({
+//           data: approvers.map((approver) => ({
+//             ...approver,
+//             mom_id: id,
+//           })),
+//         });
+//       }
+
+//       // 4. Hapus/Buat next_actions baru (HANYA JIKA ADA DI BODY)
+//       if (next_actions) {
+//         await tx.nextAction.deleteMany({
+//           where: { mom_id: id },
+//         });
+//         await tx.nextAction.createMany({
+//           data: next_actions.map((action) => ({
+//             ...action,
+//             mom_id: id,
+//           })),
+//         });
+//       }
+
+//       return mom;
+//     });
+
+//     return NextResponse.json(updatedMom, { status: 200 });
+//   } catch (error) {
+//     console.error("[MOM_PUT_ID] Error:", error);
+//     if (error instanceof z.ZodError) {
+//       return NextResponse.json({ error: error.issues }, { status: 400 });
+//     }
+//     return NextResponse.json(
+//       { error: "Internal Server Error" },
+//       { status: 500 }
+//     );
+//   }
+// }
+
+// // DELETE (Soft Delete 1 MOM)
+// export async function DELETE(
+//   request: NextRequest, // --- 3. UBAH SIGNATUR FUNGSI ---
+//   { params }: { params: { id: string } } // params sekarang aman diakses
+// ) {
+//   try {
+//     const id = parseInt(params.id); // Ini sekarang aman
+
+//     const momExists = await prisma.mom.findUnique({
+//       where: { id: id },
+//     });
+
+//     if (!momExists) {
+//       return NextResponse.json({ error: "MOM not found" }, { status: 404 });
+//     }
+
+//     const softDeletedMom = await prisma.mom.update({
+//       where: { id: id },
+//       data: {
+//         deleted_at: new Date(),
+//       },
+//     });
+
+//     return NextResponse.json(softDeletedMom, { status: 200 });
+//   } catch (error) {
+//     console.error("[MOM_DELETE_ID] Error:", error);
+//     return NextResponse.json(
+//       { error: "Internal Server Error" },
+//       { status: 500 }
+//     );
+//   }
+// }
 
 // import { NextRequest, NextResponse } from "next/server";
 // import { prisma } from "@/lib/prisma/postgres";
