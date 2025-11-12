@@ -39,7 +39,7 @@ model Mom {
   count_attendees String?
   content         Json?        // simpan struktur rich text / array section TipTap
 
-  approvers       Approver[]
+  mom_approvers   MomApprover[]
   attachments     MomAttachmentSection[] // relasi ke banyak file lampiran
   next_actions    NextAction[]
 
@@ -52,16 +52,31 @@ model Mom {
 }
 
 model Approver {
-  id      Int   @id @default(autoincrement())
-  mom_id  Int
-  name    String
-  type    String?
-  email   String?
+  id        Int      @id @default(autoincrement())
+  name      String
+  type      String?   // internal / external
+  email     String?
+  jabatan   String?   // kalau internal
+  nik       String?   // kalau internal
 
-  mom     Mom   @relation(fields: [mom_id], references: [id])
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  // relasi ke jik / MoM
+  momApprovers MomApprover[]
+  jikApprovers JikApprover[]
+}
+
+model MomApprover {
+  id           Int        @id @default(autoincrement())
+  mom_id       Int
+  approver_id  Int
+
+  approver     Approver   @relation(fields: [approver_id], references: [id])
+  mom          Mom        @relation(fields: [mom_id], references: [id])
+
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 }
 
 model MomAttachmentSection {
@@ -97,17 +112,16 @@ model NextAction {
 }
 
 model JikApprover {
-  id      Int   @id @default(autoincrement())
-  jik_id  Int
-  name    String
-  type    String
-  jabatan String?
-  nik     String?
+  id           Int        @id @default(autoincrement())
+  jik_id       Int
+  approver_id  Int
+  approver_type String?
 
-  jik     Jik   @relation(fields: [jik_id], references: [id])
+  jik          Jik        @relation(fields: [jik_id], references: [id])
+  approver     Approver   @relation(fields: [approver_id], references: [id])
 
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 }
 
 model Jik {
@@ -191,6 +205,200 @@ model ChatHistory {
   chat Chat @relation(fields: [chatId], references: [id])
 }
 
+
+// generator client {
+//   provider = "prisma-client-js"
+// }
+
+// datasource db {
+//   provider = "postgresql"
+//   url      = env("DATABASE_URL_POSTGRES")
+// }
+
+// model User {
+//   id        Int     @id @default(autoincrement())
+//   username  String  @unique
+//   name      String
+//   email     String
+//   password  String
+//   role      String
+// }
+
+// model Company {
+//   id               Int        @id @default(autoincrement())
+//   name             String
+//   pic_mitra        String?
+//   kontak_mitra     String?
+//   pic_partnership  String?
+//   logo_mitra_url   String?
+//   moms             Mom[]
+//   progress         Progress[]
+//   jiks             Jik[]
+// }
+
+// model Mom {
+//   id              Int          @id @default(autoincrement())
+//   company         Company      @relation(fields: [company_id], references: [id])
+//   company_id      Int
+//   title           String
+//   date            DateTime     @default(now())
+//   time            String?
+//   venue           String?
+//   count_attendees String?
+//   content         Json?        // simpan struktur rich text / array section TipTap
+
+//   approvers       Approver[]
+//   attachments     MomAttachmentSection[] // relasi ke banyak file lampiran
+//   next_actions    NextAction[]
+
+//   progress        Progress?                @relation(fields: [progress_id], references: [id])
+//   progress_id     Int?
+
+//   created_at                DateTime @default(now())
+//   updated_at                DateTime @updatedAt
+//   deleted_at                DateTime?
+// }
+
+// model Approver {
+//   id      Int   @id @default(autoincrement())
+//   mom_id  Int
+//   name    String
+//   type    String?
+//   email   String?
+
+//   mom     Mom   @relation(fields: [mom_id], references: [id])
+
+//   createdAt         DateTime  @default(now())
+//   updatedAt         DateTime  @updatedAt
+// }
+
+// model MomAttachmentSection {
+//   id          Int                    @id @default(autoincrement())
+//   mom_id      Int
+//   section_name String                 // nama section, misal "Lampiran Teknis" atau "Foto Dokumentasi"
+//   created_at  DateTime               @default(now())
+
+//   mom         Mom                    @relation(fields: [mom_id], references: [id])
+//   files       MomAttachmentFile[]    // relasi ke file di section ini
+// }
+
+// model MomAttachmentFile {
+//   id              Int      @id @default(autoincrement())
+//   section_id      Int
+//   file_name       String
+//   url             String   // path atau link ke storage
+//   uploaded_at     DateTime @default(now())
+
+//   section         MomAttachmentSection @relation(fields: [section_id], references: [id])
+// }
+
+
+// model NextAction {
+//   id        Int      @id @default(autoincrement())
+//   mom_id    Int
+//   action    String
+//   target    String
+//   pic       String
+//   created_at DateTime @default(now())
+
+//   mom       Mom      @relation(fields: [mom_id], references: [id])
+// }
+
+// model JikApprover {
+//   id      Int   @id @default(autoincrement())
+//   jik_id  Int
+//   name    String
+//   type    String
+//   jabatan String?
+//   nik     String?
+
+//   jik     Jik   @relation(fields: [jik_id], references: [id])
+
+//   created_at DateTime @default(now())
+//   updated_at DateTime @updatedAt
+// }
+
+// model Jik {
+//   id                        Int      @id @default(autoincrement())
+//   company                   Company  @relation(fields: [company_id], references: [id])
+//   company_id                Int
+//   judul                     String
+//   no                        String?
+//   nama                      String?
+//   nama_unit                 String?
+//   initiative_partnership    String?
+//   invest_value              String?
+//   contract_duration_years   Int?
+  
+//   document_initiative       Json?
+
+//   progress                  Progress? @relation(fields: [progress_id], references: [id])
+//   progress_id               Int?
+
+//   jik_approvers             JikApprover[]
+
+//   created_at                DateTime @default(now())
+//   updated_at                DateTime @updatedAt
+//   deleted_at                DateTime?
+// }
+
+// model Progress {
+//   id          Int        @id @default(autoincrement())
+//   company     Company    @relation(fields: [company_id], references: [id])
+//   company_id  Int
+//   step        Step?      @relation(fields: [step_id], references: [id])
+//   step_id     Int?
+//   status      Status?    @relation(fields: [status_id], references: [id])
+//   status_id   Int?
+//   documents   Document[]
+
+//   moms        Mom[]
+//   jiks         Jik[]
+// }
+
+// model Step {
+//   id        Int        @id @default(autoincrement())
+//   name      String
+//   progress  Progress[]
+// }
+
+// model Status {
+//   id        Int        @id @default(autoincrement())
+//   name      String
+//   progress  Progress[]
+// }
+
+// model Document {
+//   id           Int        @id @default(autoincrement())
+//   progress     Progress   @relation(fields: [progress_id], references: [id])
+//   progress_id  Int
+//   document_url String?
+
+//   created_at                DateTime @default(now())
+//   updated_at                DateTime @updatedAt
+//   deleted_at                DateTime?
+// }
+
+// model Chat {
+//   id          Int           @id @default(autoincrement())
+//   uuid        String        @unique
+//   title       String
+//   histories   ChatHistory[] // relasi 1-n
+//   createdAt   DateTime      @default(now())
+//   updatedAt   DateTime      @updatedAt
+// }
+
+// model ChatHistory {
+//   id        Int      @id @default(autoincrement())
+//   chatId    Int
+//   question  String
+//   answer    String?
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+
+//   chat Chat @relation(fields: [chatId], references: [id])
+// }
+//akhir
 // generator client {
 //   provider = "prisma-client-js"
 // }

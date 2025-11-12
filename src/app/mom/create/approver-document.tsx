@@ -1,79 +1,109 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { InputString } from "@/components/input";
-import InputSelect from "@/components/input/input-select";
 import { Trash2 } from "lucide-react";
+import { CreateApproverModal } from "@/components/approver/create-modal";
 
 interface Approver {
+  id: number;
   name: string;
-  email: string;
   type: string;
 }
 
 interface ApproverDocumentProps {
-  form: { approvers: Approver[] };
+  form: { approvers: { approver_id: number | null }[] };
   handleChange: (field: string, value: any) => void;
 }
 
-const approverTypeOptions = [
-  { value: "Internal", label: "Internal" },
-  { value: "Eksternal", label: "Eksternal" },
-];
-
 export function ApproverDocument({ form, handleChange }: ApproverDocumentProps) {
-  
-  function handleApproverChange(index: number, field: keyof Approver, value: string) {
-    const newApprovers = [...form.approvers];
-    newApprovers[index] = {
-      ...newApprovers[index],
-      [field]: value
-    };
-    handleChange("approvers", newApprovers);
+  const [approversList, setApproversList] = useState<Approver[]>([]);
+
+  // Ambil data approver dari API
+  const fetchApprovers = async () => {
+    try {
+      const res = await fetch("/api/approver");
+      const data = await res.json();
+      setApproversList(data);
+    } catch (err) {
+      console.error("❌ Error fetching approvers:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchApprovers();
+  }, []);
+
+  // Handler perubahan dropdown
+  function handleApproverChange(index: number, value: number) {
+    const updated = [...form.approvers];
+    updated[index] = { approver_id: value };
+    handleChange("approvers", updated);
   }
 
-  function addApprover() {
-    handleChange("approvers", [
-      ...form.approvers,
-      { name: "", email: "", type: "Internal" },
-    ]);
+  // Tambah field approver baru
+  function addApproverField() {
+    handleChange("approvers", [...form.approvers, { approver_id: null }]);
   }
 
-  function removeApprover(index: number) {
-    const newApprovers = form.approvers.filter((_, i) => i !== index);
-    handleChange("approvers", newApprovers);
+  // Hapus field approver
+  function removeApproverField(index: number) {
+    handleChange(
+      "approvers",
+      form.approvers.filter((_, i) => i !== index)
+    );
   }
+
+  // Callback setelah approver baru dibuat lewat modal
+  function handleApproverCreated(newApprover: Approver) {
+    setApproversList((prev) => [...prev, newApprover]);
+  }
+
+  // Approver yang sudah dipilih tidak bisa dipilih lagi
+  const selectedIds = form.approvers
+    .map((a) => a.approver_id)
+    .filter((id): id is number => id !== null);
 
   return (
     <div className="w-full bg-white rounded-2xl shadow p-6 mb-4">
       <h2 className="text-xl font-bold mb-4">Approver</h2>
+
       <div className="flex flex-col gap-4">
-        {form.approvers.map((approver, index) => (
+        {form.approvers.map((item, index) => (
           <div
             key={index}
-            className="grid grid-cols-1 sm:grid-cols-[2fr_2fr_1fr_auto] gap-4 items-end"
+            className="grid grid-cols-1 sm:grid-cols-[3fr_auto] gap-3 items-end"
           >
-            <InputString
-              title="Nama Penyetuju"
-              placeholder="Masukkan nama"
-              value={approver.name}
-              onChange={(e) => handleApproverChange(index, "name", e.target.value)}
-            />
-            <InputString
-              title="Email"
-              placeholder="Masukkan email"
-              type="email"
-              value={approver.email}
-              onChange={(e) => handleApproverChange(index, "email", e.target.value)}
-            />
-            <InputSelect
-              title="Tipe"
-              value={approver.type}
-              options={approverTypeOptions}
-              onChange={(value) => handleApproverChange(index, "type", value as string)}
-            />
+            <div className="flex items-center gap-2">
+              <select
+                value={item.approver_id ?? ""}
+                onChange={(e) =>
+                  handleApproverChange(index, Number(e.target.value))
+                }
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Pilih approver...</option>
+                {approversList.map((a) => (
+                  <option
+                    key={a.id}
+                    value={a.id}
+                    disabled={selectedIds.includes(a.id)} // 🚫 disable kalau udah dipilih
+                  >
+                    {a.name} ({a.type})
+                  </option>
+                ))}
+              </select>
+
+              {/* modal create approver — udah punya tombol + sendiri */}
+              <CreateApproverModal
+                onApproverCreated={handleApproverCreated}
+              />
+            </div>
+
             <Button
               type="button"
               variant="destructive"
-              onClick={() => removeApprover(index)}
+              onClick={() => removeApproverField(index)}
               className="h-10 w-10 p-2"
               disabled={form.approvers.length <= 1}
             >
@@ -82,12 +112,110 @@ export function ApproverDocument({ form, handleChange }: ApproverDocumentProps) 
           </div>
         ))}
       </div>
-      <Button type="button" variant="outline" onClick={addApprover} className="mt-4">
-        + Tambah Penyetuju
+
+      <Button
+        type="button"
+        variant="outline"
+        onClick={addApproverField}
+        className="mt-4"
+      >
+        + Tambah Field Approver
       </Button>
     </div>
   );
 }
+
+
+// import { Button } from "@/components/ui/button";
+// import { InputString } from "@/components/input";
+// import InputSelect from "@/components/input/input-select";
+// import { Trash2 } from "lucide-react";
+
+// interface Approver {
+//   name: string;
+//   email: string;
+//   type: string;
+// }
+
+// interface ApproverDocumentProps {
+//   form: { approvers: Approver[] };
+//   handleChange: (field: string, value: any) => void;
+// }
+
+// const approverTypeOptions = [
+//   { value: "Internal", label: "Internal" },
+//   { value: "Eksternal", label: "Eksternal" },
+// ];
+
+// export function ApproverDocument({ form, handleChange }: ApproverDocumentProps) {
+  
+//   function handleApproverChange(index: number, field: keyof Approver, value: string) {
+//     const newApprovers = [...form.approvers];
+//     newApprovers[index] = {
+//       ...newApprovers[index],
+//       [field]: value
+//     };
+//     handleChange("approvers", newApprovers);
+//   }
+
+//   function addApprover() {
+//     handleChange("approvers", [
+//       ...form.approvers,
+//       { name: "", email: "", type: "Internal" },
+//     ]);
+//   }
+
+//   function removeApprover(index: number) {
+//     const newApprovers = form.approvers.filter((_, i) => i !== index);
+//     handleChange("approvers", newApprovers);
+//   }
+
+//   return (
+//     <div className="w-full bg-white rounded-2xl shadow p-6 mb-4">
+//       <h2 className="text-xl font-bold mb-4">Approver</h2>
+//       <div className="flex flex-col gap-4">
+//         {form.approvers.map((approver, index) => (
+//           <div
+//             key={index}
+//             className="grid grid-cols-1 sm:grid-cols-[2fr_2fr_1fr_auto] gap-4 items-end"
+//           >
+//             <InputString
+//               title="Nama Penyetuju"
+//               placeholder="Masukkan nama"
+//               value={approver.name}
+//               onChange={(e) => handleApproverChange(index, "name", e.target.value)}
+//             />
+//             <InputString
+//               title="Email"
+//               placeholder="Masukkan email"
+//               type="email"
+//               value={approver.email}
+//               onChange={(e) => handleApproverChange(index, "email", e.target.value)}
+//             />
+//             <InputSelect
+//               title="Tipe"
+//               value={approver.type}
+//               options={approverTypeOptions}
+//               onChange={(value) => handleApproverChange(index, "type", value as string)}
+//             />
+//             <Button
+//               type="button"
+//               variant="destructive"
+//               onClick={() => removeApprover(index)}
+//               className="h-10 w-10 p-2"
+//               disabled={form.approvers.length <= 1}
+//             >
+//               <Trash2 className="h-4 w-4" />
+//             </Button>
+//           </div>
+//         ))}
+//       </div>
+//       <Button type="button" variant="outline" onClick={addApprover} className="mt-4">
+//         + Tambah Penyetuju
+//       </Button>
+//     </div>
+//   );
+// }
 
 // "use client";
 

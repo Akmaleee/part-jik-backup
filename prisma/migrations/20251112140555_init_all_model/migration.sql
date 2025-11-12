@@ -43,14 +43,26 @@ CREATE TABLE "public"."Mom" (
 -- CreateTable
 CREATE TABLE "public"."Approver" (
     "id" SERIAL NOT NULL,
-    "mom_id" INTEGER NOT NULL,
     "name" TEXT NOT NULL,
     "type" TEXT,
     "email" TEXT,
+    "jabatan" TEXT,
+    "nik" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Approver_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "public"."MomApprover" (
+    "id" SERIAL NOT NULL,
+    "mom_id" INTEGER NOT NULL,
+    "approver_id" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "MomApprover_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -90,12 +102,10 @@ CREATE TABLE "public"."NextAction" (
 CREATE TABLE "public"."JikApprover" (
     "id" SERIAL NOT NULL,
     "jik_id" INTEGER NOT NULL,
-    "name" TEXT NOT NULL,
-    "type" TEXT NOT NULL,
-    "jabatan" TEXT,
-    "nik" TEXT,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
+    "approver_id" INTEGER NOT NULL,
+    "approver_type" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "JikApprover_pkey" PRIMARY KEY ("id")
 );
@@ -168,7 +178,10 @@ ALTER TABLE "public"."Mom" ADD CONSTRAINT "Mom_company_id_fkey" FOREIGN KEY ("co
 ALTER TABLE "public"."Mom" ADD CONSTRAINT "Mom_progress_id_fkey" FOREIGN KEY ("progress_id") REFERENCES "public"."Progress"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."Approver" ADD CONSTRAINT "Approver_mom_id_fkey" FOREIGN KEY ("mom_id") REFERENCES "public"."Mom"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."MomApprover" ADD CONSTRAINT "MomApprover_approver_id_fkey" FOREIGN KEY ("approver_id") REFERENCES "public"."Approver"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."MomApprover" ADD CONSTRAINT "MomApprover_mom_id_fkey" FOREIGN KEY ("mom_id") REFERENCES "public"."Mom"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."MomAttachmentSection" ADD CONSTRAINT "MomAttachmentSection_mom_id_fkey" FOREIGN KEY ("mom_id") REFERENCES "public"."Mom"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -181,6 +194,9 @@ ALTER TABLE "public"."NextAction" ADD CONSTRAINT "NextAction_mom_id_fkey" FOREIG
 
 -- AddForeignKey
 ALTER TABLE "public"."JikApprover" ADD CONSTRAINT "JikApprover_jik_id_fkey" FOREIGN KEY ("jik_id") REFERENCES "public"."Jik"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."JikApprover" ADD CONSTRAINT "JikApprover_approver_id_fkey" FOREIGN KEY ("approver_id") REFERENCES "public"."Approver"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."Jik" ADD CONSTRAINT "Jik_company_id_fkey" FOREIGN KEY ("company_id") REFERENCES "public"."Company"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
