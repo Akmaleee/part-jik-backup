@@ -18,7 +18,7 @@ export interface MomForm {
   venue: string;
   waktu: string;
   content: MomContentSection[];
-  approvers: { approver_id: number; }[];
+  approvers: { approver_id: number }[];
   attachments: { sectionName: string; files: File[] }[];
   nextActions: { action: string; target: string; pic: string }[];
 }
@@ -41,14 +41,12 @@ export default function CreateMomPage() {
     waktu: "",
     content: [],
     approvers: [{ approver_id: 0 }],
-    attachments: [{ sectionName: "", files: []  }],
+    attachments: [{ sectionName: "", files: [] }],
     nextActions: [{ action: "", target: "", pic: "" }],
   });
 
-  // State 'generatedMomId' dihapus
-  // State ini tetap dipakai untuk status loading tombol
-  const [isGeneratingDocx, setIsGeneratingDocx] = useState(false); 
-  
+  const [isGeneratingDocx, setIsGeneratingDocx] = useState(false);
+
   const handleContentChange = useCallback((sections: MomContentSection[]) => {
     setForm((prev) => ({ ...prev, content: sections }));
   }, []);
@@ -57,71 +55,75 @@ export default function CreateMomPage() {
     setForm((prev) => ({ ...prev, [field as keyof MomForm]: value }));
   }
 
-  // ✅ FUNGSI BARU: Untuk generate dan langsung send ke endpoint
+  // ✅ FUNGSI BARU: Untuk generate dan langsung kirim ke endpoint eksternal
   async function generateAndSendDocx(momId: string, momTitle: string) {
     console.log(`MOM ${momId} dibuat, memulai generate DOCX...`);
     try {
-      // 1. Panggil API untuk generate DOCX
-      const docxResponse = await fetch('/api/mom/generate-docx', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const docxResponse = await fetch("/api/mom/generate-docx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ momId: momId }),
       });
 
       if (!docxResponse.ok) {
         const errorData = await docxResponse.json();
-        throw new Error(errorData.error || 'Gagal generate DOCX');
+        throw new Error(errorData.error || "Gagal generate DOCX");
       }
 
       const blob = await docxResponse.blob();
-      
-      // Ambil nama file dari header (opsional tapi bagus)
-      const contentDisposition = docxResponse.headers.get('content-disposition');
+      const contentDisposition = docxResponse.headers.get("content-disposition");
+
       let fileName = `MOM_${momTitle.replace(/ /g, "_")}_${momId}.docx`;
       if (contentDisposition) {
-          const fileNameMatch = contentDisposition.match(/filename="?(.+)"?/i);
-          if (fileNameMatch && fileNameMatch.length > 1) {
-              fileName = fileNameMatch[1].replace(/"$/, '');
-          }
+        const fileNameMatch = contentDisposition.match(/filename="?(.+)"?/i);
+        if (fileNameMatch && fileNameMatch.length > 1) {
+          fileName = fileNameMatch[1].replace(/"$/, "");
+        }
       }
-      
+
       console.log(`DOCX (${fileName}) berhasil digenerate, mengupload ke endpoint...`);
 
-      // 2. Kirim file (blob) ke endpoint eksternal
       const formData = new FormData();
-      formData.append("file", blob, fileName); // Nama field "file"
-      
-      const uploadResponse = await fetch('http://10.83.252.204:8000/upload', {
-        method: 'POST',
+      formData.append("file", blob, fileName);
+
+      const uploadResponse = await fetch("http://10.83.252.204:8000/upload", {
+        method: "POST",
         body: formData,
-        // (Tidak perlu 'Content-Type', FormData menanganinya sendiri)
       });
 
       if (!uploadResponse.ok) {
         const uploadError = await uploadResponse.text();
-        throw new Error(`Gagal upload DOCX ke http://10.83.252.204:8000/upload. Error: ${uploadError}`);
+        throw new Error(`Gagal upload DOCX ke server eksternal. Error: ${uploadError}`);
       }
 
-      console.log("DOCX berhasil di-upload ke endpoint eksternal.");
-      alert("MOM berhasil disimpan, dan DOCX berhasil di-upload ke server.");
+      const uploadResult = await uploadResponse.json();
+      const uploadedUrl = uploadResult?.data?.url || null;
+
+      if (uploadedUrl) {
+        console.log("DOCX berhasil di-upload:", uploadedUrl);
+        alert("MOM berhasil disimpan, dan DOCX berhasil di-upload ke server.");
+        return uploadedUrl; // ✅ URL dikembalikan di sini
+      } else {
+        console.warn("Upload sukses tapi tidak ada URL di respons:", uploadResult);
+        alert("MOM berhasil disimpan, tapi URL file tidak ditemukan di respons server.");
+        return null;
+      }
+
+      // console.log("DOCX berhasil di-upload ke endpoint eksternal.");
+      // alert("MOM berhasil disimpan, dan DOCX berhasil di-upload ke server.");
 
     } catch (error: any) {
-      console.error("Kesalahan saat generate atau send DOCX:", error);
-      // MOM sudah tersimpan, jadi jangan hentikan user, cukup beri peringatan
-      alert(`Peringatan: MOM berhasil disimpan, TETAPI gagal generate/upload DOCX otomatis. Error: ${error.message}`);
+      console.error("Kesalahan saat generate atau upload DOCX:", error);
+      alert(`Peringatan: MOM berhasil disimpan, TETAPI gagal generate/upload DOCX. Error: ${error.message}`);
     }
   }
 
-  // ✅ FUNGSI handleSubmit (DIMODIFIKASI)
-  async function handleSubmit(e: React.FormEvent) {
+  // ✅ handleSubmit menerima parameter `isFinish`
+  async function handleSubmit(e: React.FormEvent, isFinish = false) {
     e.preventDefault();
-
-    const submitter = (e.nativeEvent as any).submitter;
-    const isFinish = submitter?.name === "finish"; // Cek apakah "Save & Finish"
 
     const required = ["companyId", "judul", "tanggalMom", "peserta", "venue", "waktu"];
     for (const field of required) {
-      // ... (logika validasi Anda sudah benar)
       const value = form[field as keyof MomForm];
       if (typeof value === "string" && value.trim() === "") {
         alert(`Field ${field} wajib diisi.`);
@@ -133,7 +135,6 @@ export default function CreateMomPage() {
       }
     }
 
-    // ... (Logika upload attachment Anda sudah benar)
     const uploadedAttachments = await Promise.all(
       form.attachments.map(async (section) => {
         const isFileArray = Array.isArray(section.files) && section.files.some(f => f instanceof File);
@@ -152,29 +153,26 @@ export default function CreateMomPage() {
       })
     );
 
-    // ... (Logika payload Anda sudah benar)
     const formatted = form.content.map((s: any) => ({
       label: s.label,
       content: s.content || "",
     }));
+
     const payload = {
       ...form,
       attachments: uploadedAttachments,
       content: formatted,
       approvers: form.approvers
-        .filter((a) => a.approver_id) // pastikan id ada
-        .map((a) => ({
-          approver_id: a.approver_id,
-        })),
+        .filter((a) => a.approver_id)
+        .map((a) => ({ approver_id: a.approver_id })),
       nextActions: form.nextActions.filter(
         (a) => a.action.trim() || a.target.trim() || a.pic.trim()
       ),
-      is_finish: isFinish ? 1 : 0, // Kirim status finish
+      is_finish: isFinish ? 1 : 0,
     };
 
-    setLoading(true); // Tampilkan loading "Saving..."
+    setLoading(true);
     try {
-      // 1. Simpan MOM
       const res = await fetch("/api/mom", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -187,36 +185,61 @@ export default function CreateMomPage() {
       }
 
       const data = await res.json();
-      const newMomId = data?.data?.id; // Ambil ID MOM baru
+      const newMomId = data?.data?.id;
 
-      // 2. Cek jika "Save & Finish" ditekan
+      setLoading(false);
+
       if (isFinish && newMomId) {
-        setLoading(false); // Matikan loading "Saving..."
-        setIsGeneratingDocx(true); // Nyalakan loading "Generating..."
-        
-        // Panggil fungsi generate dan upload
-        await generateAndSendDocx(newMomId.toString(), payload.judul); 
-        
-        setIsGeneratingDocx(false); // Matikan loading "Generating..."
+        setIsGeneratingDocx(true);
+        const urlDoc = await generateAndSendDocx(newMomId.toString(), payload.judul);
+
+        // post ke /api/document
+        if (urlDoc) {
+          try {
+            const docPayload = {
+              companyId: payload.companyId,
+              fileUrl: urlDoc,
+              step_name: "MOM", // bisa diubah kalau perlu dinamis
+            };
+
+            const docResponse = await fetch("/api/document", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(docPayload),
+            });
+
+            if (!docResponse.ok) {
+              const errorData = await docResponse.json();
+              console.error("Gagal menyimpan document:", errorData);
+              alert("File berhasil di-upload, tapi gagal menyimpan data ke /api/document.");
+            } else {
+              console.log("Data document berhasil dikirim ke API /api/document");
+            }
+          } catch (error) {
+            console.error("Kesalahan saat kirim ke /api/document:", error);
+            alert("File berhasil di-upload, tapi gagal kirim data document ke API.");
+          }
+        } else {
+          console.warn("Tidak ada URL file dari proses upload DOCX.");
+        }
+
+        setIsGeneratingDocx(false);
       } else {
         alert("MOM berhasil disimpan!");
       }
-      
-      router.push("/mom/list-mom"); // Redirect ke list
 
+      router.push("/mom/list-mom");
     } catch (err: any) {
       console.error(err);
       alert("Gagal menyimpan MOM: " + err.message);
-      setLoading(false); // Matikan loading jika ada error
-      setIsGeneratingDocx(false); // Pastikan ini juga mati
+      setLoading(false);
+      setIsGeneratingDocx(false);
     }
   }
 
-  // Fungsi 'handleGenerateDocx' yang lama dihapus
-
   return (
     <div className="container mx-auto py-8 px-4 max-w-6xl">
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={(e) => e.preventDefault()}>
         <DetailDocument form={form} setForm={setForm} handleChange={handleChange} /> 
         <ContentDocument onChange={handleContentChange}/>
         <NextActionDocument form={form} setForm={setForm} handleChange={handleChange} />
@@ -229,27 +252,42 @@ export default function CreateMomPage() {
               type="button"
               variant="outline"
               onClick={() => router.back()}
-              disabled={loading || isGeneratingDocx} // Nonaktifkan saat proses
+              disabled={loading || isGeneratingDocx}
             >
               Cancel
             </Button>
-            <Button type="submit" name="save" disabled={loading || isGeneratingDocx}>
+
+            <Button
+              type="button"
+              onClick={(e) => handleSubmit(e, false)} // Save biasa
+              disabled={loading || isGeneratingDocx}
+            >
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Save
             </Button>
-            <Button type="submit" name="finish" disabled={loading || isGeneratingDocx}>
+
+            <Button
+              type="button"
+              onClick={(e) => handleSubmit(e, true)} // Save & Finish
+              disabled={loading || isGeneratingDocx}
+            >
               {isGeneratingDocx ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : null}
-              {isGeneratingDocx ? "Uploading..." : (loading ? "Saving..." : "Save & Finish")}
+              {isGeneratingDocx
+                ? "Uploading..."
+                : loading
+                ? "Saving..."
+                : "Save & Finish"}
             </Button>
-            {/* Tombol Generate DOCX manual dihapus */}
           </div>
         </div>
       </form>
     </div>
   );
 }
+
+
 
 
 // "use client";

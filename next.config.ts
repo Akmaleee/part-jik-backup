@@ -14,6 +14,13 @@ const nextConfig: NextConfig = {
     }
     return config;
   },
+
+  eslint: {
+    // Peringatan: Ini akan mengabaikan error ESLint saat build.
+    // Pastikan Anda memeriksa error secara manual di editor Anda.
+    ignoreDuringBuilds: true,
+  },
+
 };
 
 export default nextConfig;

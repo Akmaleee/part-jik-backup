@@ -1,6 +1,8 @@
-// src/lib/auth.ts
+// src/lib/auth-server.ts
+// KODE INI HANYA UNTUK SERVER COMPONENTS
+
 import { cookies, headers } from "next/headers";
-import jwt from "jsonwebtoken";
+import jwt, { JwtPayload } from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -17,7 +19,7 @@ export interface UserSession {
  */
 export async function getCurrentUser(): Promise<UserSession | null> {
   const headersList = await headers();
-  
+
   const userId = headersList.get("x-user-id");
   const username = headersList.get("x-user-username");
   const email = headersList.get("x-user-email");
@@ -48,16 +50,36 @@ export async function getUserFromCookie(): Promise<UserSession | null> {
     return null;
   }
 
+  if (!JWT_SECRET) {
+    console.error("JWT_SECRET is not set");
+    return null;
+  }
+
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as UserSession;
-    return decoded;
+    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+
+    if (
+      typeof decoded === "object" &&
+      decoded !== null &&
+      "userId" in decoded
+    ) {
+      return {
+        userId: String(decoded.userId),
+        username: String(decoded.username || ""),
+        email: String(decoded.email || ""),
+        name: String(decoded.name || ""),
+        role: String(decoded.role || ""),
+      };
+    }
+    return null;
   } catch (error) {
+    console.error("Token verification failed:", error);
     return null;
   }
 }
 
 /**
- * Check if user is authenticated
+ * Check if user is authenticated (Server side)
  */
 export async function isAuthenticated(): Promise<boolean> {
   const user = await getCurrentUser();
@@ -65,14 +87,14 @@ export async function isAuthenticated(): Promise<boolean> {
 }
 
 /**
- * Require authentication (throw error if not authenticated)
+ * Require authentication (Server side)
  */
 export async function requireAuth(): Promise<UserSession> {
   const user = await getCurrentUser();
-  
+
   if (!user) {
     throw new Error("Unauthorized");
   }
-  
+
   return user;
 }
